@@ -3,6 +3,7 @@ import { Clock } from 'three';
 import { state } from './core/state.js';
 import { emit, on } from './core/bus.js';
 import { updateTweens, tweenCount } from './core/tween.js';
+import { TOUR_STEPS } from './core/config.js';
 import { buildScooter } from './model/index.js';
 import { createScene } from './scene/index.js';
 import { createSim } from './sim/ride.js';
@@ -95,6 +96,15 @@ function tourGo(step) {
   scene.tourGo(step);
   emit('tour:step', { step });
 }
+
+// SPEC §4 的 focusPart 字段：拾取与导览写入，离开检视视角时清空
+on('part:focus', ({ id } = {}) => { state.focusPart = id || null; });
+on('tour:step', ({ step } = {}) => {
+  if (step >= 0 && step < TOUR_STEPS.length) state.focusPart = TOUR_STEPS[step].part;
+});
+on('view:change', () => {
+  if (state.view !== 'inspect') state.focusPart = null;
+});
 
 // ---- URL 参数 ----
 if (q.get('view')) setView(q.get('view'));
