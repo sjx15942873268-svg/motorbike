@@ -194,9 +194,9 @@ URL 参数：
 ### 8.2 渲染、灯光与环境
 
 1. 渲染器：`antialias: true`，`setPixelRatio(Math.min(devicePixelRatio, 2))`，`toneMapping = ACESFilmicToneMapping`，`toneMappingExposure = 1.0`，开阴影，`localClippingEnabled = true`
-2. 环境反射：`PMREMGenerator.fromScene(new RoomEnvironment(), 0.04).texture` → `scene.environment`，`environmentIntensity ≈ 0.6`
-3. 灯光：暖色主光 DirectionalLight 投影（shadow map 2048）；车后方美团黄轮廓光；低强度 HemisphereLight；大灯 SpotLight 挂车头
-4. 后期链：RenderPass → OutlinePass（描边色美团黄）→ UnrealBloomPass（threshold 0.85）→ **OutputPass（必须最后）**
+2. 环境反射：`PMREMGenerator.fromScene(new RoomEnvironment(), 0.04).texture` → `scene.environment`，`environmentIntensity = 0.3`
+3. 灯光：暖色主光 DirectionalLight 2.2 投影（shadow map 2048）；车后方美团黄轮廓光 1.5；HemisphereLight 0.3；冷色补光 0.35；大灯 SpotLight 挂车头
+4. 后期链：RenderPass → OutlinePass（描边色美团黄）→ UnrealBloomPass（strength 0.35、radius 0.4、threshold 1.0，只让真正过曝的高光起辉）→ **OutputPass（必须最后）**
 5. 背景：深色渐变 + Fog，地面用接收阴影的平面
 
 ### 8.3 骑行与跑单（src/sim/ride.js）
