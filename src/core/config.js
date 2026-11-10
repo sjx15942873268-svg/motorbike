@@ -108,8 +108,13 @@ export const PART_MAP = Object.fromEntries(PARTS.map((p) => [p.id, p]));
 export const EXPLODE_DIR = {
   deliveryBox: new THREE.Vector3(0, 1, 0),
   seat:        new THREE.Vector3(0, 1, 0),
-  frontWheel:  new THREE.Vector3(1, 0, 0),
-  rearWheel:   new THREE.Vector3(-1, 0, 0),
+  // 前轮向前方滚出并抬离地面，后轮向后上方退出，避免拆解时贴在地面上
+  frontWheel:  new THREE.Vector3(0.95, 0.31, 0).normalize(),
+  rearWheel:   new THREE.Vector3(-0.95, 0.31, 0).normalize(),
+  // 轮毂电机沿轴向（+Z 车身左侧）从轮里抽出；原自动方向会把它压到地面以下
+  hubMotor:    new THREE.Vector3(-0.25, 0, 0.97).normalize(),
+  // 脚踏板原自动方向朝正下方，会沉到地面以下，改为向前下方并偏向左侧
+  floorboard:  new THREE.Vector3(0.65, -0.4, 0.35).normalize(),
   sideCowlL:   new THREE.Vector3(0, 0, 1),
   sideCowlR:   new THREE.Vector3(0, 0, -1),
   battery:     new THREE.Vector3(0, -0.6, 0.8).normalize(),
@@ -119,10 +124,10 @@ export const EXPLODE_DIR = {
 };
 
 export const EXPLODE_DIST = {
-  deliveryBox: 0.55, seat: 0.5, frontWheel: 0.5, rearWheel: 0.5,
+  deliveryBox: 0.55, seat: 0.5, frontWheel: 0.95, rearWheel: 0.45,
   sideCowlL: 0.5, sideCowlR: 0.5, legShield: 0.42, frontFender: 0.42,
   handlebar: 0.42, rearRack: 0.42, tailLight: 0.42, battery: 0.4,
-  hubMotor: 0.3, controller: 0.32, harness: 0.3, floorboard: 0.34,
+  hubMotor: 0.42, controller: 0.32, harness: 0.3, floorboard: 0.36,
   frame: 0.15,
 };
 

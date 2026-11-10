@@ -7,7 +7,7 @@ import { TOUR_STEPS } from './core/config.js';
 import { buildScooter } from './model/index.js';
 import { createScene } from './scene/index.js';
 import { createSim } from './sim/ride.js';
-import { initAudio, getAnalyser, setMuted, updateAudio, createAudioTestPanel } from './audio/index.js';
+import { initAudio, getAnalyser, setMuted, updateAudio, createAudioTestPanel, createSoundViz } from './audio/index.js';
 import { createUI } from './ui/index.js';
 import { loadLog, saveLog, recordSnapshot, resetToday, clearAll } from './data/storage.js';
 import { exportPoster } from './data/export.js';
@@ -35,6 +35,10 @@ function unlockAudio() {
 }
 addEventListener('pointerdown', unlockAudio);
 addEventListener('keydown', unlockAudio);
+
+// ---- 声音视角的波形 / 频谱（只有声音视角显示，未解锁时画待机态）----
+const soundVizEl = document.getElementById('sound-viz');
+const soundViz = createSoundViz(document.getElementById('viz-cv'));
 
 // ---- UI ----
 const ui = createUI({
@@ -70,6 +74,7 @@ function setView(view) {
   document.querySelectorAll('[data-view]').forEach((b) =>
     b.classList.toggle('on', b.dataset.view === view));
   scene.setView(view);
+  soundVizEl?.classList.toggle('hidden', view !== 'sound' || !!solo);
   emit('view:change', { view });
 }
 
@@ -126,6 +131,7 @@ function loop() {
   updateTweens(dt);
   sim.update(dt);
   updateAudio(dt);
+  if (state.view === 'sound') soundViz.update(dt);
   scene.update(dt);
   ui.update(dt);
 
