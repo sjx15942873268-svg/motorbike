@@ -15,7 +15,8 @@ export function buildHandlebar(M) {
   );
   lens.rotation.z = -Math.PI / 2;
   lens.scale.x = 0.3;
-  lens.position.set(0.058, 0, 0);
+  // 透镜内凹进灯碗，靠灯碗遮光，避免关灯时整颗发白
+  lens.position.set(0.044, 0, 0);
   g.add(lens);
   // 灯框
   put(g, new THREE.TorusGeometry(0.084, 0.011, 8, 28), M.glossBlack, 0.075, 0, 0, 0, Math.PI / 2, 0);

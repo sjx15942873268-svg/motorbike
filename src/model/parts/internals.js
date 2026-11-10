@@ -4,12 +4,13 @@ import { put, rbox } from '../util.js';
 
 // 线束路径关键点（世界坐标，电池 → 控制器 → 电机）
 export const HARNESS_POINTS = [
-  [-0.35, 0.38, 0.06],
-  [-0.15, 0.30, 0.10],
-  [0.05, 0.32, 0.08],
-  [-0.20, 0.26, 0.12],
-  [-0.45, 0.22, 0.10],
-  [-0.62, 0.20, 0.05],
+  [-0.35, 0.44, 0.06],
+  [-0.32, 0.52, 0.08],
+  [-0.26, 0.55, 0.10],
+  [-0.16, 0.44, 0.12],
+  [-0.24, 0.34, 0.12],
+  [-0.42, 0.32, 0.10],
+  [-0.62, 0.24, 0.05],
 ];
 
 export function buildFrame(M) {
@@ -23,8 +24,8 @@ export function buildFrame(M) {
   };
   // 转向立管
   tube([[0.52, 0.99, 0], [0.51, 0.75, 0], [0.50, 0.50, 0], [0.49, 0.40, 0]], 0.033);
-  // 主梁
-  tube([[0.49, 0.42, 0], [0.25, 0.31, 0], [-0.10, 0.28, 0], [-0.45, 0.30, 0], [-0.70, 0.38, 0]], 0.028);
+  // 主梁（前段压进脚踏板内腔，后段贴侧裙下缘走）
+  tube([[0.49, 0.40, 0], [0.38, 0.265, 0], [0.15, 0.25, 0], [-0.05, 0.26, 0], [-0.25, 0.31, 0], [-0.45, 0.34, 0], [-0.70, 0.38, 0]], 0.028);
   // 前下管
   tube([[0.50, 0.55, 0], [0.47, 0.38, 0], [0.42, 0.26, 0]], 0.024);
   // 踏板托板
@@ -92,11 +93,10 @@ export function buildBattery(M) {
   return g;
 }
 
-// 控制器：铝盒 + 散热鳍片
+// 控制器：铝盒 + 散热鳍片（置于电池上方、座垫下方的内腔，侧裙遮挡）
 export function buildController(M) {
   const g = new THREE.Group();
-  // 藏在脚踏托板下方，不露在踏板上
-  g.position.set(0.05, 0.175, 0);
+  g.position.set(-0.32, 0.55, 0);
   put(g, rbox(0.17, 0.09, 0.14, 0.01), M.alu, 0, 0, 0);
   for (let i = 0; i < 6; i++) {
     put(g, new THREE.BoxGeometry(0.17, 0.028, 0.008), M.alu, 0, -0.058, -0.055 + i * 0.022);
@@ -111,17 +111,6 @@ export function buildHarness(M, points) {
   const curve = new THREE.CatmullRomCurve3(points.map((p) => new THREE.Vector3(...p)));
   const t = new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 0.014, 8), M.rubber);
   g.add(t);
-  // 控制器分支（到车把信号线）
-  const branch = new THREE.Mesh(
-    new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0.05, 0.32, 0.08),
-      new THREE.Vector3(0.22, 0.34, 0.12),
-      new THREE.Vector3(0.38, 0.42, 0.10),
-      new THREE.Vector3(0.48, 0.60, 0.06),
-    ]), 24, 0.008, 6),
-    M.rubber
-  );
-  g.add(branch);
   return g;
 }
 

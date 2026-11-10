@@ -58,9 +58,10 @@ export function createMaterials() {
   });
 
   // 发光材质（lightMats，靠 emissiveIntensity 控制）
+  // 关灯时呈深灰透镜质感，避免被环境反射打成白球
   const head = new THREE.MeshStandardMaterial({
-    color: 0xE2E6EA, emissive: 0xFFE9B0, emissiveIntensity: 0.0,
-    roughness: 0.2, metalness: 0.0,
+    color: 0x7E858B, emissive: 0xFFE9B0, emissiveIntensity: 0.0,
+    roughness: 0.55, metalness: 0.0,
   });
   const tail = new THREE.MeshStandardMaterial({
     color: 0x7A0D0D, emissive: 0xFF2222, emissiveIntensity: 0.25,
