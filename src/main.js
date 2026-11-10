@@ -47,11 +47,20 @@ const ui = createUI({
   onExport: () => exportPoster(scene.captureFrame(), state),
 });
 
-if (solo === 'audio' && createAudioTestPanel) {
-  document.getElementById('app')?.classList.add('solo-audio');
-  document.getElementById('labels')?.replaceWith(createAudioTestPanel());
+// ---- solo 模式：只保留渲染画面 + 对应测试面板 ----
+const SOLO_HIDDEN = ['#brand', '#desk', '#hud', '#hint', '#tour-card', '#part-card', '#sound-viz', '#touch', '#audio-hint'];
+if (solo) {
+  for (const sel of SOLO_HIDDEN) document.querySelector(sel)?.classList.add('hidden');
+  if (solo === 'audio' && createAudioTestPanel) {
+    const panel = createAudioTestPanel();
+    panel.id = 'audio-panel';
+    Object.assign(panel.style, {
+      position: 'absolute', left: '50%', top: '50%',
+      transform: 'translate(-50%,-50%)', zIndex: '50', minWidth: '420px',
+    });
+    document.body.appendChild(panel);
+  }
 }
-if (solo) document.body.classList.add('solo');
 
 // ---- 对外能力 ----
 function setView(view) {
