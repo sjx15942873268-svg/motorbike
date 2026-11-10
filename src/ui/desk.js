@@ -2,6 +2,7 @@
 // 只写 state.input 并发 bus 事件；视角/拆解/剖视通过 handlers 交给 main.js
 import { state } from '../core/state.js';
 import { emit, on } from '../core/bus.js';
+import { isMobile } from './drawer.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -38,7 +39,9 @@ export function createDesk(handlers = {}) {
   orderCard.appendChild(badge);
 
   // ---- 面板收起 ----
+  // 移动端由 drawer.js 接管（收起 = 关闭抽屉，见 #desk-fab）；桌面端保持原来的折叠行为
   toggleBtn.addEventListener('click', () => {
+    if (isMobile()) return;
     const folded = desk.classList.toggle('folded');
     toggleBtn.textContent = folded ? '+' : '—';
   });

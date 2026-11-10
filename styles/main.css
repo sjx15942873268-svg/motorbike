@@ -105,6 +105,28 @@ input[type=range]::-moz-range-thumb {
 }
 .status b { color: var(--accent); font-weight: 500; }
 
+/* 移动端控制台抽屉：仅 ≤720px 显示（见下方媒体查询），桌面端恒隐藏 */
+#desk-fab {
+  display: none;
+  position: absolute; left: 12px; bottom: 104px; z-index: 24;
+  align-items: center; gap: 7px;
+  padding: 10px 16px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--line);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+  color: var(--text); font-size: 12px; letter-spacing: 0.06em; cursor: pointer;
+}
+#desk-fab .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 8px var(--accent);
+}
+#desk-fab:active { transform: translateY(1px); }
+#desk-scrim {
+  display: none;
+  position: absolute; inset: 0; z-index: 22;
+  background: rgba(0,0,0,0.35);
+}
+
 /* 右下 HUD */
 #hud {
   position: absolute; right: 24px; bottom: 24px; z-index: 20;
@@ -197,9 +219,24 @@ input[type=range]::-moz-range-thumb {
   #brand { top: 16px; left: 16px; }
   #brand h1 { font-size: 20px; }
   #brand .tag { display: none; }
-  /* 让出底部触控条，避免遮挡车辆主体 */
-  #desk { left: 12px; bottom: 104px; width: 208px; }
-  #desk .desk-body { max-height: calc(100vh - 240px); overflow-y: auto; scrollbar-width: thin; }
+  /* 控制台默认收起为浮动入口 #desk-fab，不遮挡车辆主体；
+     展开时是底部抽屉（body.desk-open），位于触控条上方，点遮罩或 × 收起 */
+  #desk {
+    display: none;
+    left: 12px; right: 12px; bottom: 104px; width: auto;
+    max-height: calc(100vh - 128px);
+    flex-direction: column;
+    z-index: 23;
+  }
+  body.desk-open #desk { display: flex; }
+  #desk .desk-head { flex: none; }
+  #desk .desk-body {
+    flex: 1 1 auto; min-height: 0; max-height: none;
+    overflow-y: auto; scrollbar-width: thin;
+  }
+  #desk-fab { display: flex; }
+  body.desk-open #desk-fab { display: none; }
+  body.desk-open #desk-scrim { display: block; }
   #hud { right: 12px; bottom: 104px; }
   #speedo { width: 112px; height: 112px; }
   #speedo-cv { width: 96px; height: 96px; }
@@ -251,6 +288,8 @@ input[type=range]::-moz-range-thumb {
 /* solo 模式：只渲染场景，隐藏全部界面（#labels 为热点标签层） */
 body.solo #brand,
 body.solo #desk,
+body.solo #desk-fab,
+body.solo #desk-scrim,
 body.solo #hud,
 body.solo #tour-card,
 body.solo #part-card,

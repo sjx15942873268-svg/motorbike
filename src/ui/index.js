@@ -2,6 +2,7 @@
 import { state } from '../core/state.js';
 import { createSpeedo } from './speedo.js';
 import { createDesk, createTouch } from './desk.js';
+import { createDrawer } from './drawer.js';
 import { createTourCard } from './tour.js';
 import { createPartCard } from './partcard.js';
 import { createKeys } from './keys.js';
@@ -14,6 +15,7 @@ export function createUI(handlers = {}) {
 
   const speedo = createSpeedo(document.querySelector('#speedo-cv'));
   const desk = createDesk(handlers);
+  createDrawer();
   createTourCard(handlers);
   createPartCard();
   createKeys(handlers);
