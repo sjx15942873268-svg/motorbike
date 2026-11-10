@@ -304,7 +304,57 @@ position = home + explodeDir * explodeDist * easeInOutCubic(local)
 - 读写都包 try/catch，失败时只存内存，界面不报错
 - 导出海报：同一帧内先 `composer.render()` 再 `renderer.domElement.toDataURL()`，画到 1080x1350 的 2D Canvas，叠加标题和今日数据，a 标签 download 为 `rider-01.png`
 
-## 9. three.js 0.170 注意事项
+## 9. 集成契约（main.js 已依赖，禁止改动签名）
+
+`main.js` 由主 Agent 维护，已实现如下调用，各模块必须满足：
+
+```js
+// scene
+const scene = createScene(canvas);
+scene.scene            // THREE.Scene
+scene.renderer         // THREE.WebGLRenderer
+scene.setView(view)    // 'ride'|'drive'|'inspect'|'sound'
+scene.setExplode(t)    // 0..1
+scene.setCutaway(on)
+scene.setXray(on)
+scene.focusPart(id|null)
+scene.tourGo(step)     // 0..4
+scene.setDebug(on)
+scene.update(dt)       // 每帧
+scene.renderOnly()     // 立即渲染一帧（给截图用）
+scene.captureFrame()   // composer.render() 后返回 renderer.domElement.toDataURL()
+scene.domElement
+
+// sim
+const sim = createSim({ scene, scooter })   // 入参可选，自行决定
+sim.update(dt)
+
+// audio
+initAudio()            // 首次交互调用，返回 bool
+getAnalyser()          // AnalyserNode | null
+setMuted(bool)
+updateAudio(dt)        // 每帧
+createAudioTestPanel() // 返回 HTMLElement，仅 ?solo=audio 使用
+
+// ui
+const ui = createUI({ setView })
+ui.update(dt)
+ui.drawSpeedo(speedKmh, battery)
+
+// storage
+loadLog()              // { odometer, orders, rideSeconds, history }
+saveLog(log)
+recordSnapshot()       // 读 state 写盘
+resetToday()
+clearAll()
+
+// export
+exportPoster(dataUrl, state)   // 纯函数，dataUrl 来自 scene.captureFrame()
+```
+
+`?solo=model` 时 main.js 只渲染车辆加转台，隐藏全部 UI；`?solo=audio` 时只挂 `createAudioTestPanel()`。
+
+## 10. three.js 0.170 注意事项
 
 - 已移除：`outputEncoding`、`sRGBEncoding`、`Geometry`、`mergeBufferGeometries`（改名 `mergeGeometries`）、ExtrudeGeometry 的 `amount`（改 `depth`）、`useLegacyLights`
 - 点光源/聚光灯强度按物理单位设置，比旧教程大一个数量级

@@ -1,8 +1,7 @@
 // 桩：场景动效Agent 替换此文件
 import * as THREE from 'three';
-import { on } from '../core/bus.js';
 
-export function createScene(canvas) {
+export function createScene(canvas, opts = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.setSize(innerWidth, innerHeight);
@@ -28,21 +27,20 @@ export function createScene(canvas) {
   ground.rotation.x = -Math.PI / 2;
   scene.add(ground);
 
-  const api = {
+  function resize() {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  }
+  addEventListener('resize', resize);
+
+  return {
     renderer, scene, camera,
     setView() {}, setExplode() {}, setCutaway() {}, setXray() {},
-    focusPart() {}, tourGo() {},
+    focusPart() {}, tourGo() {}, setDebug() {}, setTurntable() {},
     update() { renderer.render(scene, camera); },
-    resize() {
-      camera.aspect = innerWidth / innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(innerWidth, innerHeight);
-    },
     renderOnly() { renderer.render(scene, camera); },
+    captureFrame() { renderer.render(scene, camera); return renderer.domElement.toDataURL(); },
     get domElement() { return renderer.domElement; },
   };
-
-  on('view:change', () => {});
-  addEventListener('resize', api.resize);
-  return api;
 }

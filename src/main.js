@@ -1,45 +1,59 @@
+import * as THREE from 'three';
+import { Clock } from 'three';
 import { state } from './core/state.js';
 import { emit, on } from './core/bus.js';
 import { updateTweens } from './core/tween.js';
 import { buildScooter } from './model/index.js';
 import { createScene } from './scene/index.js';
 import { createSim } from './sim/ride.js';
-import { initAudio, getAnalyser, setMuted, updateAudio } from './audio/index.js';
+import { initAudio, getAnalyser, setMuted, updateAudio, createAudioTestPanel } from './audio/index.js';
 import { createUI } from './ui/index.js';
 import { loadLog, saveLog, recordSnapshot, resetToday, clearAll } from './data/storage.js';
 import { exportPoster } from './data/export.js';
-import { Clock } from 'three';
 
 const q = new URLSearchParams(location.search);
+const solo = q.get('solo');
 const canvas = document.getElementById('gl');
-const scene = createScene(canvas);
 
-// 车辆
-import * as THREE from 'three';
+// ---- 场景与车辆 ----
+const scene = createScene(canvas, { solo });
 const scooter = buildScooter();
 scene.scene.add(scooter.root);
+if (solo === 'model') scene.setTurntable(true);
 
-// sim
-const sim = createSim();
+const sim = createSim({ scene, scooter });
 
-// 音频（首次交互解锁）
+// ---- 音频 ----
 let audioReady = false;
 function unlockAudio() {
   if (audioReady) return;
-  audioReady = initAudio();
+  audioReady = !!initAudio();
   state.audio.unlocked = true;
   emit('audio:unlock');
   document.getElementById('audio-hint')?.classList.add('hidden');
 }
-addEventListener('pointerdown', unlockAudio, { once: false });
-addEventListener('keydown', unlockAudio, { once: false });
+addEventListener('pointerdown', unlockAudio);
+addEventListener('keydown', unlockAudio);
 
-// UI
+// ---- UI ----
 const ui = createUI({
   setView,
+  setExplode,
+  setCutaway,
+  setXray,
+  tourGo,
+  onResetToday: () => { resetToday(); recordSnapshot(); },
+  onClear: () => { clearAll(); recordSnapshot(); },
+  onExport: () => exportPoster(scene.captureFrame(), state),
 });
 
-// ---- 视图 ----
+if (solo === 'audio' && createAudioTestPanel) {
+  document.getElementById('app')?.classList.add('solo-audio');
+  document.getElementById('labels')?.replaceWith(createAudioTestPanel());
+}
+if (solo) document.body.classList.add('solo');
+
+// ---- 对外能力 ----
 function setView(view) {
   if (!['ride', 'drive', 'inspect', 'sound'].includes(view)) return;
   state.view = view;
@@ -68,7 +82,7 @@ function setXray(onFlag) {
 
 function tourGo(step) {
   state.tour.step = step;
-  state.tour.active = step >= 0;
+  state.tour.active = step >= 0 && step < 5;
   scene.tourGo(step);
   emit('tour:step', { step });
 }
@@ -78,8 +92,9 @@ if (q.get('view')) setView(q.get('view'));
 if (q.get('explode')) setExplode(parseFloat(q.get('explode')) || 0);
 if (q.get('cutaway') === '1') setCutaway(true);
 if (q.get('xray') === '1') setXray(true);
-if (q.get('tour') !== null) tourGo(parseInt(q.get('tour'), 10) || 0);
-if (q.get('debug') === '1') scene.setDebug?.(true);
+if (q.get('tour') !== null && q.get('tour') !== '') tourGo(parseInt(q.get('tour'), 10) || 0);
+if (q.get('debug') === '1') scene.setDebug(true);
+if (q.get('muted') === '1') setMuted(true);
 
 // ---- 主循环 ----
 const clock = new Clock();
@@ -89,11 +104,10 @@ function loop() {
   const dt = Math.min(clock.getDelta(), 0.05);
   updateTweens(dt);
   sim.update(dt);
-  updateAudio(dt, getAnalyser());
+  updateAudio(dt);
   scene.update(dt);
   ui.update(dt);
 
-  // 每 5 秒存档
   acc += dt;
   if (acc >= 5) { acc = 0; recordSnapshot(); }
 }
@@ -114,7 +128,8 @@ window.__app = {
   state,
   setView, setExplode, setCutaway, setXray, tourGo,
   debugSetSpeed(v) { state.ride.speed = v; },
-  exportPoster,
+  exportPoster: () => exportPoster(scene.captureFrame(), state),
+  scene, scooter,
 };
 emit('app:ready');
 console.log('[rider01] ready');
