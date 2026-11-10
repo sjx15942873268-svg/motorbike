@@ -12,6 +12,12 @@ const CURB_SPACING = 2;
 const CURB_COUNT = 41;           // 每侧
 const ROAD_Z = 5.4;              // 路灯位置
 const CURB_Z = 5.95;
+const LAMP_HEAD_Y = 3.45;        // 灯头高度（与 lampHeadGeometry 的平移一致）
+const LAMP_HEAD_LEN = 0.44;      // 灯头长度，用于估算角尺寸
+// 窄画幅下骑行相机会按比例拉远，容易贴到灯头。灯头在画面里占比过大时会过曝成
+// 大白块，这里按「占屏宽比例」把灯整体缩没（远灯不受影响，横屏构图不变）。
+const FADE_MAX = 0.32;           // 占比 ≥ 该值开始缩没
+const FADE_MIN = 0.15;           // 占比 ≤ 该值完全消失
 
 function asphaltTexture() {
   const c = document.createElement('canvas');
@@ -117,7 +123,7 @@ export function createRoad(parent) {
   for (let i = 0; i < CURB_COUNT; i++) curbX.push(-WRAP_X + i * CURB_SPACING);
 
   const dummy = new THREE.Object3D();
-  function layout(dist) {
+  function layout(dist, cam) {
     for (let i = 0; i < LAMP_COUNT; i++) {
       lampX[i] -= dist;
       if (lampX[i] < -WRAP_X) lampX[i] += WRAP_X * 2;
@@ -126,11 +132,26 @@ export function createRoad(parent) {
       curbX[i] -= dist;
       if (curbX[i] < -WRAP_X) curbX[i] += WRAP_X * 2;
     }
+    // 水平视场角（弧度），用于把灯头角尺寸换算成占屏比例
+    const hfov = cam
+      ? 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2) * cam.aspect)
+      : 0;
     for (let s = 0; s < 2; s++) {
       const z = s === 0 ? ROAD_Z : -ROAD_Z;
+      const headZ = s === 0 ? z - 0.95 : z + 0.95;
       for (let i = 0; i < LAMP_COUNT; i++) {
+        let k = 1;
+        if (cam) {
+          const dx = lampX[i] - cam.position.x;
+          const dy = LAMP_HEAD_Y - cam.position.y;
+          const dz = headZ - cam.position.z;
+          const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          const ratio = (LAMP_HEAD_LEN / Math.max(d, 0.01)) / hfov;
+          k = THREE.MathUtils.clamp((FADE_MAX - ratio) / (FADE_MAX - FADE_MIN), 0, 1);
+        }
         dummy.position.set(lampX[i], 0, z);
         dummy.rotation.set(0, s === 0 ? 0 : Math.PI, 0);
+        dummy.scale.setScalar(Math.max(k, 1e-3));
         dummy.updateMatrix();
         lamps.setMatrixAt(s * LAMP_COUNT + i, dummy.matrix);
         lampHeads.setMatrixAt(s * LAMP_COUNT + i, dummy.matrix);
@@ -138,6 +159,7 @@ export function createRoad(parent) {
       for (let i = 0; i < CURB_COUNT; i++) {
         dummy.position.set(curbX[i], 0.05, s === 0 ? CURB_Z : -CURB_Z);
         dummy.rotation.set(0, 0, 0);
+        dummy.scale.setScalar(1);
         dummy.updateMatrix();
         curbs.setMatrixAt(s * CURB_COUNT + i, dummy.matrix);
       }
@@ -151,7 +173,7 @@ export function createRoad(parent) {
   let riding = true;
   let mix = 1;
 
-  function update(dt, speed) {
+  function update(dt, speed, cam) {
     const target = riding ? 1 : 0;
     mix += (target - mix) * Math.min(1, dt * 3.2);
     if (Math.abs(mix - target) < 0.003) mix = target;
@@ -160,7 +182,7 @@ export function createRoad(parent) {
     if (group.visible) {
       tex.offset.x += (speed * dt) / TEX_LENGTH;
       for (const m of fadeMats) m.opacity = mix;
-      layout(speed * dt);
+      layout(speed * dt, cam);
     }
     for (const m of platformMats) m.opacity = 1 - mix;
   }

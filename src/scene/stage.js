@@ -41,11 +41,12 @@ export function createStage(canvas, scene, camera) {
 
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environmentIntensity = 0.6;
+  // 环境反射强度过高会把黄漆的蓝通道抬起来（去饱和），压到 0.3
+  scene.environmentIntensity = 0.3;
   pmrem.dispose();
 
   // 暖色主光（投影）
-  const key = new THREE.DirectionalLight(0xfff1d6, 3.2);
+  const key = new THREE.DirectionalLight(0xfff1d6, 2.2);
   key.position.set(4, 6, 3);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
@@ -60,14 +61,14 @@ export function createStage(canvas, scene, camera) {
   scene.add(key);
 
   // 车后方美团黄轮廓光
-  const rim = new THREE.DirectionalLight(ACCENT, 2.6);
+  const rim = new THREE.DirectionalLight(ACCENT, 1.5);
   rim.position.set(-5, 2.4, -2.5);
   scene.add(rim);
 
-  const hemi = new THREE.HemisphereLight(0x46505e, 0x0a0a0c, 0.45);
+  const hemi = new THREE.HemisphereLight(0x46505e, 0x0a0a0c, 0.3);
   scene.add(hemi);
 
-  const fill = new THREE.DirectionalLight(0xbfd0e0, 0.55);
+  const fill = new THREE.DirectionalLight(0xbfd0e0, 0.35);
   fill.position.set(2.5, 1.6, 4.5);
   scene.add(fill);
 
@@ -81,7 +82,8 @@ export function createStage(canvas, scene, camera) {
   outlinePass.visibleEdgeColor.set(ACCENT);
   outlinePass.hiddenEdgeColor.set(0x2a2200);
   composer.addPass(outlinePass);
-  composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.4, 0.85));
+  // threshold 1.0：只让真正过曝的高光（头灯/发光件）起辉，避免整辆车被白光罩住
+  composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.35, 0.4, 1.0));
   composer.addPass(new OutputPass());
 
   return { renderer, composer, outlinePass };

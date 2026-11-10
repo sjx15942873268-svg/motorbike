@@ -17,6 +17,7 @@ import { createCameraRig } from './camera.js';
 import { createFlash } from './flash.js';
 
 const CUTAWAY_MAX = 0.6;     // 剖视平面 constant 起始值
+const HIDDEN_EDGE = 0x2a2200; // OutlinePass 被遮挡边缘的常态颜色
 
 export function createScene(canvas, opts = {}) {
   const solo = opts.solo || null;
@@ -47,6 +48,7 @@ export function createScene(canvas, opts = {}) {
   // ---------- 内部状态 ----------
   let scooter = null;
   let shellMats = [];
+  let decalMats = [];
   let xray = null;
   let labels = null;
   let highlight = null;
@@ -152,7 +154,8 @@ export function createScene(canvas, opts = {}) {
     s.root.traverse((o) => {
       if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
     });
-    shellMats = [...(s.shellMaterials || []), ...collectDecalMaterials(s)];
+    decalMats = collectDecalMaterials(s);
+    shellMats = [...(s.shellMaterials || []), ...decalMats];
     for (const part of s.parts || []) {
       if (part.object && part.internal) unshareMaterials(part);
     }
@@ -173,7 +176,10 @@ export function createScene(canvas, opts = {}) {
       }
       if (!part.explodeDist) part.explodeDist = EXPLODE_DIST[part.id] ?? 0.35;
     }
-    for (const m of shellMats) m.side = THREE.DoubleSide;
+    // 外壳件开 DoubleSide（剖视要看到内壁）；贴花保持 FrontSide ——
+    // 双面渲染会让远侧贴花从背面透出来，变成反字重影
+    const decalSet = new Set(decalMats);
+    for (const m of shellMats) m.side = decalSet.has(m) ? THREE.FrontSide : THREE.DoubleSide;
     if (state.cutaway) {
       for (const m of shellMats) m.clippingPlanes = [clipPlane];
     }
@@ -193,7 +199,46 @@ export function createScene(canvas, opts = {}) {
     }
   }
 
+  // ---------- 内部件揭示 ----------
+  // 导览 / 拾取聚焦到内部件（电池组、轮毂电机、控制器）时外壳会挡住描边，
+  // 把外壳临时半透明；失焦时按快照精确还原
+  let revealSnap = null;
+  function setShellReveal(on) {
+    if (!!on === !!revealSnap) return;
+    // OutlinePass 的深度预渲染用 overrideMaterial，外壳 depthWrite=false 挡不住它，
+    // 内部件的描边会被判成「隐藏边缘」。揭示期间把隐藏边缘也涂成美团黄，
+    // 这样描边才能透过半透明外壳看见。
+    outlinePass.hiddenEdgeColor.set(on ? ACCENT : HIDDEN_EDGE);
+    if (on) {
+      revealSnap = shellMats.map((m) => ({
+        m, opacity: m.opacity, transparent: m.transparent, depthWrite: m.depthWrite,
+      }));
+      for (const m of shellMats) {
+        m.transparent = true;
+        m.opacity = 0.18;
+        m.depthWrite = false;
+      }
+    } else {
+      for (const s of revealSnap) {
+        s.m.opacity = s.opacity;
+        s.m.transparent = s.transparent;
+        s.m.depthWrite = s.depthWrite;
+      }
+      revealSnap = null;
+    }
+  }
+
   // ---------- 交互 ----------
+  // 按当前选中的零件决定是否揭示外壳。setView 会被调用多次（main.js 启动时
+  // 先按 URL 参数调一次、随后再 setView(state.view) 一次），不能简单粗暴地
+  // 在 setView 里 setShellReveal(false)，否则 ?view=inspect&tour=2 的揭示
+  // 会被第二次 setView 抹掉。
+  function syncReveal() {
+    const id = highlight ? highlight.current : null;
+    const part = id && scooter ? (scooter.parts || []).find((p) => p.id === id) : null;
+    setShellReveal(!!(part && part.internal) && !state.xray);
+  }
+
   function setView(view) {
     if (!VIEWS[view]) return;
     state.view = view;
@@ -202,24 +247,41 @@ export function createScene(canvas, opts = {}) {
     road.setRiding(view === 'ride' && solo !== 'model');
     const wantXray = view === 'drive';
     state.xray = wantXray;
-    if (xray) xray.setXray(wantXray);
+    if (wantXray) {
+      // 先还原外壳再上 X 光，避免 X 光快照把揭示态当成原始状态
+      setShellReveal(false);
+      if (xray) xray.setXray(true);
+    } else {
+      if (xray) xray.setXray(false);
+      if (view !== 'inspect' && highlight) highlight.focus(null);
+      syncReveal();
+    }
     if (labels) labels.setVisible(view === 'inspect');
-    if (view !== 'inspect' && highlight) highlight.focus(null);
   }
 
   function setXray(onFlag) {
     state.xray = !!onFlag;
-    if (xray) xray.setXray(state.xray);
+    if (state.xray) {
+      setShellReveal(false);
+      if (xray) xray.setXray(true);
+    } else {
+      if (xray) xray.setXray(false);
+      syncReveal();
+    }
   }
 
   function focusPart(id) {
-    if (highlight) highlight.focus(id);
+    if (!highlight) return null;
+    const part = highlight.focus(id);
+    syncReveal();
+    return part;
   }
 
   function tourGo(step) {
     if (!highlight) return;
     const def = TOUR_STEPS[step];
     highlight.focus(def ? def.part : null);
+    syncReveal();
   }
 
   function setDebug(v) {
@@ -262,10 +324,9 @@ export function createScene(canvas, opts = {}) {
   });
 
   // ---------- 总线 ----------
-  onBus('part:focus', ({ id } = {}) => { if (highlight) highlight.focus(id); });
-  onBus('tour:step', ({ step } = {}) => {
-    if (highlight) highlight.focus(step >= 0 && step < TOUR_STEPS.length ? TOUR_STEPS[step].part : null);
-  });
+  // 拾取与外部 part:focus 都走 focusPart，保证内部件的外壳揭示一致触发
+  onBus('part:focus', ({ id } = {}) => { if (highlight) focusPart(id); });
+  onBus('tour:step', ({ step } = {}) => { if (highlight) tourGo(step); });
   onBus('horn', () => { hornT = 0; flash.flashPart('handlebar'); });
   onBus('light:toggle', ({ which } = {}) => {
     if (which === 'head') flash.flashPart('handlebar');
@@ -302,23 +363,23 @@ export function createScene(canvas, opts = {}) {
     rig.updateFov(dt);
     if (hornT >= 0) updateHorn(dt);
     if (turntable && scooter) scooter.root.rotation.y += dt * 0.45;
-    road.update(dt, state.ride.speed);
+    road.update(dt, state.ride.speed, camera);
     if (xray) xray.update(dt, state.input.throttle);
     updateHeadSpot();
     flash.updateFlash(dt);
     if (debug && boxHelper && scooter) boxHelper.box.setFromObject(scooter.root);
     composer.render();
-    if (labels) { labels.update(); labels.render(camera); }
+    if (labels) { labels.update(camera); labels.render(camera); }
   }
 
   function renderOnly() {
     composer.render();
-    if (labels) { labels.update(); labels.render(camera); }
+    if (labels) { labels.update(camera); labels.render(camera); }
   }
 
   function captureFrame() {
     composer.render();
-    if (labels) { labels.update(); labels.render(camera); }
+    if (labels) { labels.update(camera); labels.render(camera); }
     return renderer.domElement.toDataURL('image/png');
   }
 
@@ -328,6 +389,8 @@ export function createScene(canvas, opts = {}) {
     renderer.setSize(innerWidth, innerHeight);
     composer.setSize(innerWidth, innerHeight);
     if (labels) labels.setSize(innerWidth, innerHeight);
+    // 画幅变了要按新的宽高比重新补偿相机距离（竖屏拉远、横屏收回）
+    rig.refitAspect();
   }
   addEventListener('resize', resize);
 

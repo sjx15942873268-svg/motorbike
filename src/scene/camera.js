@@ -7,20 +7,31 @@ import { VIEWS } from './views.js';
 import { explodeBoundingBox } from './explode.js';
 
 const TRANSITION = 1.2;   // 视角切换时长（秒）
+// 设计宽高比 = 验收视口 1440×900。更窄的画幅按比例拉远，保证整车在画面内；
+// 更宽或等比的画幅 scale 恒为 1，横屏构图完全不变。
+const BASE_ASPECT = 1440 / 900;
 
 export function createCameraRig(camera, controls, { solo, getScooter } = {}) {
   let camTween = null;
   let fitTween = null;
   let pendingViewPos = null;   // 视角 tween 的目标机位（拆解适配时沿用它的观察方向）
 
+  // 窄幅（竖屏）时把相机拉远，补偿水平视场角的丢失
+  function aspectScale() {
+    return Math.max(1, BASE_ASPECT / camera.aspect);
+  }
+  let lastScale = aspectScale();
+
   // 视角切换：同时插值相机位置与 controls.target，过渡期间禁用 OrbitControls
   function flyTo(cfg, duration = TRANSITION) {
     kill(camTween);
     kill(fitTween);
     fitTween = null;
+    const s = aspectScale();
+    lastScale = s;
     const p0 = camera.position.clone();
     const t0 = controls.target.clone();
-    const p1 = cfg.pos.clone();
+    const p1 = cfg.pos.clone().sub(cfg.target).multiplyScalar(s).add(cfg.target);
     const t1 = cfg.target.clone();
     pendingViewPos = p1;
     controls.enabled = false;
@@ -43,11 +54,13 @@ export function createCameraRig(camera, controls, { solo, getScooter } = {}) {
   function updateRideCamera() {
     const k = Math.min(state.ride.speed / MAX_SPEED, 1);
     const sh = 0.03 * k;
+    const s = aspectScale();
     const t = performance.now() * 0.001;
+    const b = VIEWS.ride.target;
     camera.position.set(
-      VIEWS.ride.pos.x + Math.sin(t * 37.3) * sh + (Math.random() - 0.5) * sh * 0.6,
-      VIEWS.ride.pos.y + Math.sin(t * 41.7) * sh * 0.6,
-      VIEWS.ride.pos.z + Math.sin(t * 33.1) * sh * 0.8
+      b.x + (VIEWS.ride.pos.x - b.x) * s + Math.sin(t * 37.3) * sh + (Math.random() - 0.5) * sh * 0.6,
+      b.y + (VIEWS.ride.pos.y - b.y) * s + Math.sin(t * 41.7) * sh * 0.6,
+      b.z + (VIEWS.ride.pos.z - b.z) * s + Math.sin(t * 33.1) * sh * 0.8
     );
     camera.lookAt(controls.target);
   }
@@ -72,7 +85,10 @@ export function createCameraRig(camera, controls, { solo, getScooter } = {}) {
     const sphere = box.getBoundingSphere(new THREE.Sphere());
     if (!isFinite(sphere.radius) || sphere.radius <= 0) return;
     const vFov = THREE.MathUtils.degToRad(camera.fov);
-    const dist = Math.max(1.6, (sphere.radius / Math.tan(vFov / 2)) * 1.12);
+    const s = aspectScale();
+    lastScale = s;
+    // 竖屏下水平视场角变窄，单按垂直 FOV 算距离会把车裁掉，乘上宽高比补偿
+    const dist = Math.max(1.6, (sphere.radius / Math.tan(vFov / 2)) * 1.12) * s;
     kill(fitTween);
     // URL 参数（?explode=）会在视角 tween 未结束时触发自动拉远，这里要取消视角 tween，
     // 否则两条 tween 同帧写相机，最终停在视角机位而不是包围盒适配位
@@ -102,8 +118,17 @@ export function createCameraRig(camera, controls, { solo, getScooter } = {}) {
     });
   }
 
+  // 画幅变化后按新的宽高比等比调整相机距离（保留 OrbitControls 的观察方向）
+  function refitAspect() {
+    const s = aspectScale();
+    if (Math.abs(s - lastScale) < 1e-3) return;
+    const off = camera.position.clone().sub(controls.target).multiplyScalar(s / lastScale);
+    camera.position.copy(controls.target).add(off);
+    lastScale = s;
+  }
+
   return {
-    flyTo, updateRideCamera, updateFov, fitCameraToExplode,
+    flyTo, updateRideCamera, updateFov, fitCameraToExplode, refitAspect,
     get transitioning() { return !!(camTween || fitTween); },
   };
 }
