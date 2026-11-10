@@ -11,6 +11,8 @@ export function tween({ duration = 1, ease = easeInOutCubic, onUpdate, onComplet
   return tw;
 }
 
+export function tweenCount() { return active.size; }
+
 export function kill(tw) {
   if (tw) tw.dead = true;
 }

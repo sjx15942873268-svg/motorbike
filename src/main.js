@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Clock } from 'three';
 import { state } from './core/state.js';
 import { emit, on } from './core/bus.js';
-import { updateTweens } from './core/tween.js';
+import { updateTweens, tweenCount } from './core/tween.js';
 import { buildScooter } from './model/index.js';
 import { createScene } from './scene/index.js';
 import { createSim } from './sim/ride.js';
@@ -108,7 +108,9 @@ if (q.get('muted') === '1') setMuted(true);
 // ---- 主循环 ----
 const clock = new Clock();
 let acc = 0;
+let paused = false;
 function loop() {
+  if (paused) return;
   requestAnimationFrame(loop);
   const dt = Math.min(clock.getDelta(), 0.05);
   updateTweens(dt);
@@ -134,6 +136,13 @@ loop();
 
 window.__app = {
   ready: true,
+  busy: () => tweenCount() > 0,
+  pause(v) {
+    const want = !!v;
+    if (want === paused) return;
+    paused = want;
+    if (!paused) { clock.getDelta(); loop(); }
+  },
   state,
   setView, setExplode, setCutaway, setXray, tourGo,
   debugSetSpeed(v) { state.ride.speed = v; },
