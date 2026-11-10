@@ -1,6 +1,3 @@
-// 桩：音频Agent 替换此文件
-export function initAudio() { return false; }
-export function getAnalyser() { return null; }
-export function setMuted() {}
-export function updateAudio() {}
-export function createAudioTestPanel() { return document.createElement('div'); }
+// 音频模块对外契约（main.js 依赖，禁止改签名）。
+export { initAudio, getAnalyser, setMuted, updateAudio } from './engine.js';
+export { createAudioTestPanel } from './panel.js';
