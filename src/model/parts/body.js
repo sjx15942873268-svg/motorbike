@@ -1,0 +1,149 @@
+// 车身覆盖件：前护板、脚踏板、侧裙（左右）、前挡泥板、座垫
+import * as THREE from 'three';
+import {
+  put, extrudeSide, annularSector, rbox, bulgeDecalMesh,
+} from '../util.js';
+import { createSideDecalTexture } from '../decals.js';
+
+// 侧裙鼓包（胶囊）：几何与贴花共用同一组参数
+export const BULGE = { r: 0.26, zScale: 0.45, xHalf: 0.133, xScale: 0.95 };
+export const BULGE_POS = { x: -0.52, y: 0.42, z: 0.165 };
+
+// 前护板：竖直弧形板，侧视轮廓挤出
+export function buildLegShield(M) {
+  const g = new THREE.Group();
+  const s = new THREE.Shape();
+  s.moveTo(0.43, 0.24);
+  s.quadraticCurveTo(0.395, 0.52, 0.425, 0.86);
+  s.quadraticCurveTo(0.44, 0.985, 0.52, 1.00);
+  s.lineTo(0.565, 0.985);
+  s.quadraticCurveTo(0.60, 0.93, 0.595, 0.78);
+  s.quadraticCurveTo(0.585, 0.52, 0.60, 0.28);
+  s.quadraticCurveTo(0.60, 0.235, 0.55, 0.23);
+  s.lineTo(0.47, 0.23);
+  s.quadraticCurveTo(0.43, 0.23, 0.43, 0.24);
+  s.closePath();
+  g.add(new THREE.Mesh(extrudeSide(s, 0.38, 0.02, 0.015), M.paint));
+
+  // 顶部黑色塑料包边
+  put(g, new THREE.CylinderGeometry(0.021, 0.021, 0.40, 12), M.glossBlack, 0.515, 0.985, 0, Math.PI / 2, 0, 0);
+  // 前缘黑色饰条
+  const trim = new THREE.Mesh(
+    new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0.428, 0.90, 0.20),
+      new THREE.Vector3(0.408, 0.60, 0.205),
+      new THREE.Vector3(0.44, 0.30, 0.205),
+    ]), 20, 0.012, 8),
+    M.glossBlack
+  );
+  g.add(trim);
+  const trimR = trim.clone();
+  trimR.scale.z = -1;
+  g.add(trimR);
+  return g;
+}
+
+// 脚踏板：低平，黄色基体 + 黑色防滑垫
+export function buildFloorboard(M) {
+  const g = new THREE.Group();
+  const s = new THREE.Shape();
+  s.moveTo(-0.06, 0.215);
+  s.lineTo(0.40, 0.215);
+  s.quadraticCurveTo(0.455, 0.215, 0.462, 0.25);
+  s.quadraticCurveTo(0.465, 0.268, 0.44, 0.268);
+  s.lineTo(-0.06, 0.268);
+  s.closePath();
+  g.add(new THREE.Mesh(extrudeSide(s, 0.32, 0.01, 0.008), M.paint));
+  // 黑色防滑垫（带浅棱）
+  put(g, rbox(0.47, 0.016, 0.29, 0.006), M.matteBlack, 0.19, 0.276, 0);
+  for (let i = 0; i < 6; i++) {
+    put(g, new THREE.BoxGeometry(0.44, 0.004, 0.012), M.rubber, 0.19, 0.285, -0.11 + i * 0.044);
+  }
+  return g;
+}
+
+// 后部侧裙：包住后轮的饱满车身，侧视轮廓（带轮拱）挤出 + 外侧胶囊鼓包；左右镜像
+export function buildSideCowl(M, side) {
+  const g = new THREE.Group();
+  const s = new THREE.Shape();
+  s.moveTo(-0.05, 0.34);
+  s.lineTo(-0.05, 0.19);
+  s.lineTo(-0.3852, 0.19);
+  // 后轮轮拱（圆心 = 后轮轴，半径略大于轮胎）
+  s.absarc(-0.62, 0.20, 0.235, -0.04256, Math.PI + 0.04256, false);
+  s.lineTo(-0.90, 0.19);
+  s.quadraticCurveTo(-0.935, 0.215, -0.94, 0.32);
+  s.lineTo(-0.94, 0.48);
+  s.quadraticCurveTo(-0.94, 0.63, -0.885, 0.685);
+  s.quadraticCurveTo(-0.835, 0.735, -0.76, 0.74);
+  s.lineTo(-0.64, 0.71);
+  s.quadraticCurveTo(-0.50, 0.69, -0.34, 0.682);
+  s.quadraticCurveTo(-0.22, 0.676, -0.14, 0.672);
+  s.quadraticCurveTo(-0.07, 0.645, -0.05, 0.50);
+  s.closePath();
+
+  const half = new THREE.Mesh(extrudeSide(s, 0.17, 0.045, 0.02), M.paint);
+  half.position.z = side * 0.115;
+  g.add(half);
+
+  // 底边镀铬饰条（贴车身下缘）
+  const trim = new THREE.Mesh(
+    new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-0.06, 0.20, side * 0.243),
+      new THREE.Vector3(-0.30, 0.198, side * 0.245),
+      new THREE.Vector3(-0.55, 0.196, side * 0.245),
+      new THREE.Vector3(-0.80, 0.196, side * 0.245),
+      new THREE.Vector3(-0.92, 0.21, side * 0.24),
+    ]), 32, 0.008, 8),
+    M.chrome
+  );
+  g.add(trim);
+
+  // 外侧鼓包（胶囊非均匀缩放）
+  const bulge = new THREE.Mesh(new THREE.CapsuleGeometry(BULGE.r, 0.28, 6, 18), M.paint);
+  bulge.rotation.z = Math.PI / 2;
+  bulge.scale.set(1.0, BULGE.xScale, BULGE.zScale);
+  bulge.position.set(BULGE_POS.x, BULGE_POS.y, side * BULGE_POS.z);
+  g.add(bulge);
+
+  // 美团贴花（贴合鼓包外表面，避免被鼓包遮住）
+  const tex = createSideDecalTexture();
+  const decal = bulgeDecalMesh(
+    tex, 0.44, 0.22,
+    BULGE_POS.x, 0.44, side * BULGE_POS.z, side, BULGE
+  );
+  g.add(decal);
+
+  return g;
+}
+
+// 前挡泥板：黄色弧形板，包住前轮上半部
+export function buildFrontFender(M) {
+  const g = new THREE.Group();
+  const s = annularSector(0.215, 0.278, -0.38, Math.PI + 0.38);
+  g.add(new THREE.Mesh(extrudeSide(s, 0.12, 0.015, 0.012), M.paint));
+  g.position.set(0.62, 0.20, 0);
+  return g;
+}
+
+// 座垫：黑色长条，顶面略压扁，后带镀铬扶手
+export function buildSeat(M) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(rbox(0.66, 0.13, 0.30, 0.05, 4), M.seat);
+  body.position.set(-0.375, 0.74, 0);
+  body.scale.y = 0.9;
+  g.add(body);
+  // 镀铬后扶手
+  const rail = new THREE.Mesh(
+    new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-0.68, 0.785, 0.125),
+      new THREE.Vector3(-0.735, 0.83, 0.10),
+      new THREE.Vector3(-0.75, 0.835, 0),
+      new THREE.Vector3(-0.735, 0.83, -0.10),
+      new THREE.Vector3(-0.68, 0.785, -0.125),
+    ]), 28, 0.012, 8),
+    M.chrome
+  );
+  g.add(rail);
+  return g;
+}
