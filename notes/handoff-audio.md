@@ -1,15 +1,16 @@
-# 音频 Agent 交接（阶段1）
+# 音频 Agent 交接（阶段1 + 阶段3 V2）
 
 ## 改动文件
 
 | 文件 | 说明 |
 |---|---|
-| `src/audio/index.js` | 对外契约，仅 re-export（签名未动） |
+| `src/audio/index.js` | 对外契约，仅 re-export（原有签名未动，新增 `createSoundViz`） |
 | `src/audio/engine.js` | AudioContext / master GainNode / AnalyserNode / 持续发声体 / 总线接线 |
 | `src/audio/synth.js` | 噪声 buffer 生成 + 一次性音效合成原语 |
 | `src/audio/panel.js` | `?solo=audio` 测试面板（8 个按钮） |
+| `src/audio/viz.js` | **阶段3 新增**：声音视角波形 + 频谱Canvas 可视化 |
 
-未改动 `docs/SPEC.md`、`src/main.js`、`styles/main.css` 及任何其他目录。
+未改动 `docs/SPEC.md`、`src/main.js`、`styles/main.css`、`index.html` 及音频外任何目录。
 
 ## 导出接口（与 main.js 契约一致）
 
@@ -19,9 +20,26 @@ export function getAnalyser()          // AnalyserNode | null（未解锁时为 
 export function setMuted(bool)
 export function updateAudio(dt)        // 每帧调用
 export function createAudioTestPanel() // HTMLElement，仅 ?solo=audio 挂到 #labels
+export function createSoundViz(canvas) // 阶段3 新增，返回 { update(dt) }
 ```
 
 额外导出（panel 内部使用，不影响契约）：`testMotor/testTire/testHorn/testSignal/testBrake/testBox/testChime/toggleMuted`。
+
+## createSoundViz（阶段3 新增，V2 验收项）
+
+```js
+const viz = createSoundViz(document.getElementById('viz-cv'));
+viz.update(dt);   // 每帧调用
+```
+
+- 只读 `getAnalyser()`，不碰音频图；未解锁（null）时画静态平线 + 低幅噪点 + `STANDBY`，不报错。
+- 布局按 `#viz-cv` 实际 CSS 尺寸（520×120，最大 80vw）：上半波形、下半频谱，中间细分隔线；
+  自适应 `clientWidth/clientHeight` 与 `devicePixelRatio`（隐藏时 clientWidth=0 直接跳过）。
+- 波形：`getByteTimeDomainData()`，先描边（美团黄 0.9）再向下闭合填 10% 透明黄；
+  峰值偏小时温和自动增益（上限 12 倍，近静音不放大），否则低音量下波形几乎成一条线。
+- 频谱：`getByteFrequencyData()`，对数分箱 40Hz ~ min(10kHz, 奈奎斯特)，柱数 24~72 按宽度自适应，
+  快攻慢放平滑；柱体 22% 透明黄 + 顶部 1.5px 亮线。
+- 颜色统一 `rgba(251,196,5,α)`，与项目「深色玻璃 + 美团黄」一致；面板背景由 CSS 提供，画布透明。
 
 ## 音频图
 
@@ -50,7 +68,21 @@ export function createAudioTestPanel() // HTMLElement，仅 ?solo=audio 挂到 #
 总线接线：`light:toggle`、`horn`、`box:toggle`、`signal:tick`、`order:delivered`、`audio:unlock`。
 持续音读 `state.ride.speed` / `state.input.throttle` / `state.input.brake` / `state.audio.muted`。
 
-## 自测结果（Playwright + 系统 Chrome，`?solo=audio`）
+## 自测结果（Playwright + 系统 Chrome，swiftshader 软渲染）
+
+### 阶段3（V2 声音可视化，`?view=sound`，1440×900）
+
+模拟 main.js 将接的线（`createSoundViz` + 去掉 `#sound-viz` 的 hidden + 每帧 `update(dt)`）：
+
+| 用例 | 结果 |
+|---|---|
+| 声音视角 + 真实点击解锁 + 油门/速度驱动 | `unlocked=true`、analyser 存在；画布 518×118，着非背景像素 10739、美团黄像素 8659；截图 `/tmp/viz-sound-live.png` 可见波形起伏 + 频谱柱 |
+| 非声音视角（`/`） | `#sound-viz` class 仍为 `hidden`、`computed display:none`，无误显示；零报错 |
+| 声音视角不点击（未解锁） | analyser 为 null、**零报错**，画布仍画出静态平线 + 低幅噪柱 + `STANDBY`（4380 像素）；截图 `/tmp/viz-sound-locked.png` |
+
+三个用例控制台 / pageerror 均为空。
+
+### 阶段1（`?solo=audio`）
 
 - 面板 8 个按钮渲染正常（截图 `/tmp/audio-final.png`）。
 - 未解锁前调用 `getAnalyser/setMuted/updateAudio` 均不抛错，`getAnalyser()` 为 null。
@@ -68,3 +100,10 @@ export function createAudioTestPanel() // HTMLElement，仅 ?solo=audio 挂到 #
 3. **idle 电机底噪**：解锁后即使 speed=0 也有 0.02 增益的 120Hz 啸叫底噪（spec 公式即如此），检视/听音视角下持续可闻。
 4. **favicon 404**：`?solo=audio` 页面控制台有两条 `/favicon.ico` 404，与音频无关（本地服务未提供图标）；主页面无报错。
 5. 转向继电器只在 `signal:tick` 的 `on=true` 时响（避免一个闪烁周期响两次）。
+6. **无头软渲染下视角 tween 墙钟被拉长**：`dt` 钳制 0.05 + 低帧率，1.2s 的视角过渡在 swiftshader 下可能要十几秒，截图前需等 `window.__app.busy()` 为 false（`tools/shoot.mjs` 的 `settle` 已处理）。
+7. **并发编辑期发现的场景侧缺陷**：`src/scene/labels.js` 的 `tracks.push` 缺 `el` 导致每帧 `offsetWidth` 报错、`window.__app` 无法赋值（详见 `notes/requests.md`）。音频侧不负责，自测时仅在 Playwright 内临时 patch。
+
+## 需要主 Agent 处理
+
+见 `notes/requests.md` 末尾「音频 Agent → 主 Agent 集成备注（阶段3 V2 声音可视化）」：
+main.js 需 import `createSoundViz`、实例化、在 `setView` 里 toggle `#sound-viz`、在 loop 里调 `update(dt)`。
