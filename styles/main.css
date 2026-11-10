@@ -65,7 +65,7 @@ body {
   color: var(--dim); text-transform: uppercase;
 }
 .row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
-.slider-row span { width: 30px; color: var(--dim); }
+.slider-row span { width: 30px; flex: none; white-space: nowrap; color: var(--dim); }
 .slider-row b { width: 38px; text-align: right; font-family: var(--mono); font-weight: 400; color: var(--accent); }
 
 input[type=range] {
@@ -110,7 +110,7 @@ input[type=range]::-moz-range-thumb {
   position: absolute; right: 24px; bottom: 24px; z-index: 20;
   display: flex; flex-direction: column; align-items: flex-end; gap: 12px;
 }
-#order-card { width: 196px; padding: 10px 12px; }
+#order-card { width: 196px; padding: 10px 12px; position: relative; }
 .oc-title { font-size: 10px; letter-spacing: 0.2em; color: var(--dim); margin-bottom: 6px; }
 .oc-num { font-family: var(--mono); font-size: 12px; color: var(--text); margin-bottom: 6px; }
 .oc-num b { color: var(--accent); font-size: 15px; }
@@ -197,12 +197,20 @@ input[type=range]::-moz-range-thumb {
   #brand { top: 16px; left: 16px; }
   #brand h1 { font-size: 20px; }
   #brand .tag { display: none; }
-  #desk { left: 12px; bottom: 12px; width: 216px; }
-  #hud { right: 12px; bottom: 12px; }
-  #speedo { width: 128px; height: 128px; }
-  #speedo-cv { width: 112px; height: 112px; }
-  #order-card { width: 128px; }
+  /* 让出底部触控条，避免遮挡车辆主体 */
+  #desk { left: 12px; bottom: 104px; width: 208px; }
+  #desk .desk-body { max-height: calc(100vh - 240px); overflow-y: auto; scrollbar-width: thin; }
+  #hud { right: 12px; bottom: 104px; }
+  #speedo { width: 112px; height: 112px; }
+  #speedo-cv { width: 96px; height: 96px; }
+  #order-card { width: 112px; }
+  #tour-card { bottom: 104px; }
+  #sound-viz { bottom: 210px; }
+  #part-card { top: 64px; right: 12px; width: 190px; }
   #hint { display: none; }
+  /* 状态行四项在窄面板里允许换行，避免文字被挤压 */
+  #desk .status { flex-wrap: wrap; gap: 2px 0; font-size: 10px; }
+  #desk .status span { white-space: nowrap; }
   #touch {
     display: flex; position: absolute; inset: auto 0 0 0; z-index: 25;
     padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
@@ -212,6 +220,42 @@ input[type=range]::-moz-range-thumb {
     pointer-events: auto; flex: 1; height: 58px; border-radius: 12px;
     background: var(--panel); border: 1px solid var(--line);
     backdrop-filter: blur(16px); color: var(--text); font-size: 14px;
+    touch-action: none; user-select: none; -webkit-user-select: none;
   }
-  #touch button:active { background: var(--accent); color: #111; }
+  #touch button:active, #touch button.on { background: var(--accent); color: #111; }
 }
+
+/* 状态行低电量 */
+.status b.low { color: #FF5A5A; }
+
+/* 订单卡送达动画 */
+.oc-badge {
+  position: absolute; top: 8px; right: 10px;
+  font-size: 10px; letter-spacing: 0.1em; color: var(--accent);
+  opacity: 0; pointer-events: none;
+}
+#order-card.delivered { animation: oc-pop 0.9s ease; }
+#order-card.delivered .oc-badge { animation: oc-badge 1.6s ease forwards; }
+@keyframes oc-pop {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.06); box-shadow: 0 0 0 2px var(--accent), 0 12px 40px rgba(0,0,0,0.45); }
+  100% { transform: scale(1); }
+}
+@keyframes oc-badge {
+  0% { opacity: 0; transform: translateY(4px); }
+  15% { opacity: 1; transform: translateY(0); }
+  75% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* solo 模式：只渲染场景，隐藏全部界面（#labels 为热点标签层） */
+body.solo #brand,
+body.solo #desk,
+body.solo #hud,
+body.solo #tour-card,
+body.solo #part-card,
+body.solo #hint,
+body.solo #touch,
+body.solo #sound-viz,
+body.solo #labels,
+body.solo #audio-hint { display: none !important; }
